@@ -2,11 +2,14 @@ package com.dicoding.intermediate.geolocation.mygeofence
 
 import android.annotation.SuppressLint
 import android.annotation.TargetApi
+import android.app.PendingIntent
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Build
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 
@@ -17,6 +20,10 @@ import com.google.android.gms.maps.SupportMapFragment
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.MarkerOptions
 import com.dicoding.intermediate.geolocation.mygeofence.databinding.ActivityMapsBinding
+import com.google.android.gms.location.Geofence
+import com.google.android.gms.location.GeofencingClient
+import com.google.android.gms.location.GeofencingRequest
+import com.google.android.gms.location.LocationServices
 import com.google.android.gms.maps.model.CircleOptions
 
 class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
@@ -27,6 +34,18 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private val centerLat = 37.4274745
     private val centerLng = -122.169719
     private val geofenceRadius = 400.0
+
+    private lateinit var geofencingClient: GeofencingClient
+
+    private val geofencePendingIntent: PendingIntent by lazy {
+        val intent = Intent(this, GeofenceReceiver::class.java)
+        intent.action = GeofenceReceiver.ACTION_GEOFENCE_EVENT
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            PendingIntent.getBroadcast(this, 0, intent, PendingIntent.FLAG_MUTABLE)
+        } else {
+            PendingIntent.getBroadcast(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -59,6 +78,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         )
 
         getMyLocation()
+        addGeofence()
     }
 
     private val requestBackgroundLocationPermissionLauncher =
@@ -112,6 +132,45 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         } else {
             requestLocationPermissionLauncher.launch(android.Manifest.permission.ACCESS_FINE_LOCATION)
         }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun addGeofence() {
+        geofencingClient = LocationServices.getGeofencingClient(this)
+
+        val geofence = Geofence.Builder()
+            .setRequestId("kampus")
+            .setCircularRegion(
+                centerLat,
+                centerLng,
+                geofenceRadius.toFloat()
+            )
+            .setExpirationDuration(Geofence.NEVER_EXPIRE)
+            .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_DWELL or Geofence.GEOFENCE_TRANSITION_ENTER)
+            .setLoiteringDelay(5000)
+            .build()
+
+        val geofencingRequest = GeofencingRequest.Builder()
+            .setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER)
+            .addGeofence(geofence)
+            .build()
+
+        geofencingClient.removeGeofences(geofencePendingIntent).run {
+            addOnCompleteListener {
+                geofencingClient.addGeofences(geofencingRequest, geofencePendingIntent).run {
+                    addOnSuccessListener {
+                        showToast("Geofencing Added")
+                    }
+                    addOnFailureListener {
+                        showToast("Geofencing not added: ${it.message}")
+                    }
+                }
+            }
+        }
+    }
+
+    private fun showToast(text: String) {
+        Toast.makeText(this@MapsActivity, text, Toast.LENGTH_SHORT).show()
     }
 
 }
