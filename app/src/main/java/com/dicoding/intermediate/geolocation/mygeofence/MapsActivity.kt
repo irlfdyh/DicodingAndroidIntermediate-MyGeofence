@@ -11,6 +11,7 @@ import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 
 import com.google.android.gms.maps.CameraUpdateFactory
@@ -57,6 +58,10 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         val mapFragment = supportFragmentManager
             .findFragmentById(R.id.map) as SupportMapFragment
         mapFragment.getMapAsync(this)
+
+        if (Build.VERSION.SDK_INT >= 33) {
+            setupNotification()
+        }
     }
 
     override fun onMapReady(googleMap: GoogleMap) {
@@ -134,6 +139,35 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         }
     }
 
+    private val requestPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) {
+                Toast.makeText(this, "Akses notifikasi telah diberikan", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "Akses notifikasi telah ditolak", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+    @RequiresApi(Build.VERSION_CODES.M)
+    private fun setupNotification() {
+        when {
+            ContextCompat.checkSelfPermission(
+                this,
+                POST_NOTIFICATION
+            ) == PackageManager.PERMISSION_GRANTED -> {
+                // Already granted
+            }
+            shouldShowRequestPermissionRationale(POST_NOTIFICATION) -> {
+                // Show rationale message
+            }
+            else -> {
+                if (Build.VERSION.SDK_INT >= 33) {
+                    requestPermissionLauncher.launch(POST_NOTIFICATION)
+                }
+            }
+        }
+    }
+
     @SuppressLint("MissingPermission")
     private fun addGeofence() {
         geofencingClient = LocationServices.getGeofencingClient(this)
@@ -171,6 +205,11 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
     private fun showToast(text: String) {
         Toast.makeText(this@MapsActivity, text, Toast.LENGTH_SHORT).show()
+    }
+
+    companion object {
+        @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+        private const val POST_NOTIFICATION = android.Manifest.permission.POST_NOTIFICATIONS
     }
 
 }
